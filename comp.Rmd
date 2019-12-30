@@ -1,0 +1,237 @@
+```{r}
+# Remove all variables from the R environment to create a fresh start
+rm(list=ls())
+```
+
+```{r}
+train <- read.csv('train.csv')
+test <- read.csv("test.csv")
+# combined <- data.frame(c(as.factor(train$tweet) ,as.factor(test$tweet)))
+str(train)
+str(test)
+# str(combined)
+# rm(y)
+```
+
+```{r}
+round(prop.table(table(train$sentiment)),2)
+# quite balanced
+```
+
+```{r}
+library(tm)
+# corpus <- Corpus(VectorSource(combined))
+corpus <- Corpus(VectorSource(train$tweet))
+corpus <- tm_map(corpus, content_transformer(tolower))  
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removealphanum)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+corpus <- tm_map(corpus, stemDocument)
+corpus
+as.character(corpus[[1]])
+dtm <- DocumentTermMatrix(corpus)
+dtm <- removeSparseTerms(dtm, 0.999)
+dim(dtm)
+dtm
+```
+```{r}
+corpus_test <- Corpus(VectorSource(test$tweet))
+corpus_test <- tm_map(corpus_test, content_transformer(tolower))  
+corpus_test <- tm_map(corpus_test, removePunctuation)
+corpus_test <- tm_map(corpus_test, removealphanum)
+corpus_test <- tm_map(corpus_test, removeWords, stopwords("english"))
+corpus_test <- tm_map(corpus_test, stemDocument)
+corpus_test
+as.character(corpus_test[[1]])
+dtm_test <- DocumentTermMatrix(corpus_test)
+dtm_test <- removeSparseTerms(dtm_test, 0.999)
+dim(dtm_test)
+```
+```{r}
+removealphanum<- function(x){
+  y<-trimws(gsub("\\w*[0-9]+\\w*\\s*", "", x))
+  y
+}
+```
+
+```{r}
+inspect(dtm[0:10, 1:15])
+inspect(dtm_test[0:10, 1:15])
+```
+```{r}
+findFreqTerms(dtm, lowfreq=1000) #identifying terms that appears more than 1000 times
+# findFreqTerms(dtm_test, lowfreq=700)
+```
+
+```{r}
+ncol(dtm)
+ncol(dtm_test)
+```
+
+```{r}
+library("wordcloud")
+# labelled 3
+three <- subset(train, sentiment==3)
+# head(three)
+wordcloud(three$tweet, max.words = 100, scale = c(3,0.5))
+```
+
+```{r}
+# labelled 2
+two <- subset(train, sentiment==2)
+# head(two)
+wordcloud(two$tweet, max.words = 100, scale = c(3,0.5))
+```
+
+```{r}
+# labelled 1
+one <- subset(train, sentiment==1)
+# head(one)
+wordcloud(one$tweet, max.words = 100, scale = c(3,0.5))
+```
+
+```{r}
+convert_count <- function(x) {
+    y <- ifelse(x > 0, 1,0)
+    y <- factor(y, levels=c(0,1), labels=c("No", "Yes"))
+    y
+}
+```
+
+```{r}
+# Apply the convert_count function to get final training and testing DTMs
+datasetNB <- apply(dtm, 2, convert_count)
+dataset <- as.data.frame(as.matrix(datasetNB))
+dim(dataset)
+dataset
+```
+
+```{r}
+datasetNB_test <- apply(dtm_test, 2, convert_count)
+dataset_test <- as.data.frame(as.matrix(datasetNB_test))
+dataset_test # one hot encoding
+```
+
+
+```{r}
+dataset$Class = as.factor(train$sentiment)
+str(dataset$Class)
+```
+
+```{r}
+head(dataset)
+dim(dataset)
+```
+```{r}
+set.seed(222)
+split = sample(2,nrow(dataset),prob = c(0.75,0.25),replace = TRUE)
+train_set = dataset[split == 1,]
+test_set = dataset[split == 2,]
+# train_set = dataset
+# test_set = dataset_test
+
+prop.table(table(train_set$Class))
+prop.table(table(test_set$Class))
+```
+
+```{r}
+# library(caTools)
+# set.seed(123)
+# spl <- sample.split(train$sentiment, 0.7)
+# train_1 <- subset(train, spl == TRUE)
+# test_1 <- subset(train, spl == FALSE)
+# prop.table(table(train_1$sentiment))
+# prop.table(table(test_1$sentiment))
+```
+
+```{r}
+train_set[-2]
+test_set[-2]
+```
+```{r}
+# sapply(train_set,'[[',2985)
+```
+
+
+```{r}
+library(randomForest)
+rf_classifier = randomForest(x = train_set[-2],
+                             y = train_set$Class,
+                             ntree = 300)
+
+rf_classifier
+```
+
+```{r}
+# Predicting the Test set results 
+rf_pred <- predict(rf_classifier, newdata = test_set)
+library(caret)
+confusionMatrix(table(rf_pred,test_set$Class))
+
+```
+
+```{r}
+rf_pred
+```
+
+```{r}
+library(e1071)
+control <- trainControl(method="repeatedcv", number=10, repeats=3)
+system.time( classifier_nb <- naiveBayes(train_set, train_set$Class, laplace = 1,
+                                         trControl = control,tuneLength = 7) )
+```
+
+```{r}
+nb_pred = predict(classifier_nb, type = 'class', newdata = test_set)
+# nb_pred
+# test_output <- cbind.data.frame(test,sentiment=nb_pred)
+# test_output_wo_tweets <- test_output[c('Id' , "sentiment")]
+# str(test_output)
+# str(test_output_wo_tweets)
+confusionMatrix(nb_pred,test_set$Class)
+```
+```{r}
+# write.csv(test_output_wo_tweets,"C:\\Users\\clare\\OneDrive\\Documents\\SUTD1\\Term 6\\AE\\AE comp\\results.csv", row.names = FALSE)
+```
+
+
+```{r}
+# install.packages('e1071') 
+library(e1071) 
+svm_classifier <- svm(Class~., data=train_set)
+svm_pred <- predict(svm_classifier,test_set)
+library(caret)
+confusionMatrix(table(svm_pred,test_set$Class))
+```
+
+```{r}
+svm_pred <- predict(svm_classifier,test_set)
+library(caret)
+confusionMatrix(table(svm_pred,test_set$Class))
+```
+
+```{r}
+library(rpart)
+cart_classifier <- rpart(Class~., data=train_set)
+cart_pred <- predict(cart_classifier,test_set, type="class")
+library(caret)
+confusionMatrix(table(cart_pred,test_set$Class))
+```
+
+```{r}
+cart_pred <- predict(cart_classifier,test_set, type="class")
+library(caret)
+confusionMatrix(table(cart_pred,test_set$Class))
+```
+
+```{r}
+log_classifier <- glm(Class~., data=train_set, family = "binomial")
+log_classifier
+```
+
+```{r log reg does not classify}
+log_pred <- predict(log_classifier,test_set, type="response")
+library(caret)
+confusionMatrix(table(log_pred,test_set$Class))
+```
+
