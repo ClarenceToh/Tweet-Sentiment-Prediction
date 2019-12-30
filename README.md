@@ -1,6 +1,8 @@
 # Tweet-Sentiment-Prediction
 Predicting Sentiment of Tweets about the weather
+
 This is part of a kaggle competition "2019 40.016 The Analytics Edge Competition"
+
 Website: https://www.kaggle.com/c/2019tae
 
 ## Group Members:
